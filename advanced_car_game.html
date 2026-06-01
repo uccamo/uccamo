@@ -1,0 +1,616 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Neon Drive 3D</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #000;
+            user-select: none;
+            -webkit-user-select: none;
+            touch-action: none;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        #gameCanvas {
+            width: 100vw;
+            height: 100vh;
+            display: block;
+        }
+        #ui {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+        }
+        .score-container {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            color: #0ff;
+            font-size: 24px;
+            font-weight: bold;
+            text-shadow: 0 0 10px #0ff;
+        }
+        .controls {
+            position: absolute;
+            bottom: 20px;
+            width: 100%;
+            display: flex;
+            justify-content: space-between;
+            padding: 0 20px;
+            box-sizing: border-box;
+            pointer-events: none;
+        }
+        .control-group {
+            display: flex;
+            gap: 10px;
+        }
+        .btn {
+            width: 70px;
+            height: 70px;
+            background: rgba(0, 255, 255, 0.1);
+            border: 2px solid rgba(0, 255, 255, 0.5);
+            border-radius: 50%;
+            color: rgba(0, 255, 255, 0.8);
+            font-size: 24px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            pointer-events: auto;
+            backdrop-filter: blur(4px);
+            box-shadow: 0 0 15px rgba(0, 255, 255, 0.2) inset;
+        }
+        .btn:active, .btn.active {
+            background: rgba(0, 255, 255, 0.4);
+            box-shadow: 0 0 20px rgba(0, 255, 255, 0.8) inset, 0 0 20px rgba(0, 255, 255, 0.8);
+        }
+        #screens {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background: rgba(0, 0, 0, 0.7);
+            backdrop-filter: blur(8px);
+            pointer-events: auto;
+        }
+        .panel {
+            text-align: center;
+            color: white;
+            border: 2px solid #f0f;
+            padding: 40px;
+            border-radius: 20px;
+            box-shadow: 0 0 30px rgba(255, 0, 255, 0.3);
+            background: rgba(20, 0, 20, 0.8);
+        }
+        h1 {
+            color: #f0f;
+            text-shadow: 0 0 15px #f0f;
+            font-size: 36px;
+            margin-bottom: 10px;
+            margin-top: 0;
+        }
+        p {
+            color: #ccc;
+            font-size: 18px;
+            margin-bottom: 30px;
+        }
+        .start-btn {
+            background: transparent;
+            border: 2px solid #0ff;
+            color: #0ff;
+            padding: 15px 40px;
+            font-size: 20px;
+            font-weight: bold;
+            border-radius: 30px;
+            cursor: pointer;
+            text-transform: uppercase;
+            box-shadow: 0 0 15px rgba(0, 255, 255, 0.3) inset;
+        }
+        .start-btn:active {
+            background: rgba(0, 255, 255, 0.2);
+            box-shadow: 0 0 25px #0ff inset, 0 0 25px #0ff;
+        }
+    </style>
+    <!-- Import Three.js as an ES module map -->
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+</head>
+<body>
+    <div id="gameContainer"></div>
+
+    <div id="ui">
+        <div class="score-container" id="scoreDisplay">Score: 0</div>
+
+        <div class="controls">
+            <div class="control-group">
+                <div class="btn" id="btnLeft">←</div>
+                <div class="btn" id="btnRight">→</div>
+            </div>
+            <div class="control-group">
+                <div class="btn" id="btnBrake">B</div>
+                <div class="btn" id="btnGas">G</div>
+            </div>
+        </div>
+    </div>
+
+    <div id="screens">
+        <div class="panel" id="startPanel">
+            <h1>NEON DRIVE 3D</h1>
+            <p>High-End WebGL Demo</p>
+            <p style="font-size: 14px; color: #888;">Use Gas/Brake to control speed.<br>Steer to avoid neon blocks.</p>
+            <button class="start-btn" id="startBtn">START ENGINE</button>
+        </div>
+    </div>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+        import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+        import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+
+        // Setup Renderer
+        const container = document.getElementById('gameContainer');
+        const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
+        renderer.setPixelRatio(window.devicePixelRatio);
+        renderer.setSize(window.innerWidth, window.innerHeight);
+
+        // Advanced Rendering settings
+        renderer.toneMapping = THREE.ACESFilmicToneMapping;
+        renderer.toneMappingExposure = 1.2;
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        container.appendChild(renderer.domElement);
+
+        // Setup Scene & Camera
+        const scene = new THREE.Scene();
+        scene.fog = new THREE.FogExp2(0x050011, 0.02); // Cyberpunk dark blue fog
+
+        const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+        // Position camera behind and slightly above where the car will be
+        camera.position.set(0, 4, 10);
+        camera.lookAt(0, 0, 0);
+
+        // Setup Post-Processing (Bloom)
+        const renderScene = new RenderPass(scene, camera);
+
+        // Resolution, strength, radius, threshold
+        const bloomPass = new UnrealBloomPass(
+            new THREE.Vector2(window.innerWidth, window.innerHeight),
+            1.5, // strength
+            0.4, // radius
+            0.85 // threshold - only bright things glow
+        );
+
+        const composer = new EffectComposer(renderer);
+        composer.addPass(renderScene);
+        composer.addPass(bloomPass);
+
+        // --- 3D Assets Generation ---
+
+        // Procedural Road Texture (Noise)
+        function createAsphaltTexture() {
+            const canvas = document.createElement('canvas');
+            canvas.width = 512;
+            canvas.height = 512;
+            const context = canvas.getContext('2d');
+
+            // Noise generation
+            context.fillStyle = '#222';
+            context.fillRect(0, 0, 512, 512);
+            for (let i = 0; i < 20000; i++) {
+                context.fillStyle = Math.random() > 0.5 ? '#1a1a1a' : '#2a2a2a';
+                context.fillRect(Math.random() * 512, Math.random() * 512, 2, 2);
+            }
+
+            // Lane markers
+            context.fillStyle = '#ffaa00'; // Yellow line
+            context.fillRect(250, 0, 12, 512);
+
+            const tex = new THREE.CanvasTexture(canvas);
+            tex.wrapS = THREE.RepeatWrapping;
+            tex.wrapT = THREE.RepeatWrapping;
+            tex.repeat.set(1, 20); // Stretch along road
+            return tex;
+        }
+
+        // Environment Road
+        const roadGeo = new THREE.PlaneGeometry(30, 2000);
+        const roadMat = new THREE.MeshStandardMaterial({
+            map: createAsphaltTexture(),
+            roughness: 0.8,
+            metalness: 0.1
+        });
+        const road = new THREE.Mesh(roadGeo, roadMat);
+        road.rotation.x = -Math.PI / 2;
+        road.receiveShadow = true;
+        scene.add(road);
+
+        // Grid helpers for cyberpunk look
+        const gridHelper = new THREE.GridHelper(200, 50, 0xff00ff, 0x000033);
+        gridHelper.position.y = 0.01;
+        scene.add(gridHelper);
+
+        // The Car
+        const carGroup = new THREE.Group();
+
+        // High-end car body material
+        const bodyMat = new THREE.MeshPhysicalMaterial({
+            color: 0x000000,
+            metalness: 0.9,
+            roughness: 0.1,
+            clearcoat: 1.0,
+            clearcoatRoughness: 0.1
+        });
+
+        // Car Body
+        const bodyGeo = new THREE.BoxGeometry(2, 0.8, 4.5);
+        const bodyMesh = new THREE.Mesh(bodyGeo, bodyMat);
+        bodyMesh.position.y = 0.7;
+        bodyMesh.castShadow = true;
+        carGroup.add(bodyMesh);
+
+        // Car Roof/Cabin
+        const roofGeo = new THREE.BoxGeometry(1.6, 0.6, 2.5);
+        const glassMat = new THREE.MeshPhysicalMaterial({
+            color: 0x111111,
+            metalness: 0.9,
+            roughness: 0.0,
+            transmission: 0.9, // glass-like
+            ior: 1.5
+        });
+        const roofMesh = new THREE.Mesh(roofGeo, glassMat);
+        roofMesh.position.set(0, 1.4, -0.2);
+        roofMesh.castShadow = true;
+        carGroup.add(roofMesh);
+
+        // Glowing Taillights (Bloom triggers on colors > 1)
+        const tailGeo = new THREE.BoxGeometry(0.6, 0.2, 0.1);
+        const tailMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(4.0, 0.0, 0.0) }); // Super bright red
+
+        const leftTail = new THREE.Mesh(tailGeo, tailMat);
+        leftTail.position.set(-0.6, 0.8, 2.26);
+        carGroup.add(leftTail);
+
+        const rightTail = new THREE.Mesh(tailGeo, tailMat);
+        rightTail.position.set(0.6, 0.8, 2.26);
+        carGroup.add(rightTail);
+
+        // Neon Underglow
+        const underGlow = new THREE.PointLight(0x00ffff, 2, 5);
+        underGlow.position.set(0, 0.2, 0);
+        carGroup.add(underGlow);
+
+        scene.add(carGroup);
+
+        // --- Lighting & Environment ---
+
+        // Global ambient light
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.2);
+        scene.add(ambientLight);
+
+        // Dynamic Streetlights
+        const streetLights = [];
+        const lightPoles = new THREE.Group();
+        scene.add(lightPoles);
+
+        function createStreetLight(zPos) {
+            const group = new THREE.Group();
+
+            // Pole
+            const poleGeo = new THREE.CylinderGeometry(0.1, 0.2, 8);
+            const poleMat = new THREE.MeshStandardMaterial({ color: 0x333333, metalness: 0.8 });
+            const pole = new THREE.Mesh(poleGeo, poleMat);
+            pole.position.set(-16, 4, 0); // On the left side
+            pole.castShadow = true;
+            group.add(pole);
+
+            // Arm
+            const armGeo = new THREE.CylinderGeometry(0.1, 0.1, 4);
+            const arm = new THREE.Mesh(armGeo, poleMat);
+            arm.rotation.z = Math.PI / 2;
+            arm.position.set(-14, 8, 0);
+            arm.castShadow = true;
+            group.add(arm);
+
+            // The light source
+            const spotLight = new THREE.SpotLight(0xffaa00, 100);
+            spotLight.position.set(-12, 8, 0);
+            spotLight.angle = Math.PI / 4;
+            spotLight.penumbra = 0.5;
+            spotLight.decay = 2;
+            spotLight.distance = 50;
+
+            // High quality shadows
+            spotLight.castShadow = true;
+            spotLight.shadow.mapSize.width = 1024;
+            spotLight.shadow.mapSize.height = 1024;
+            spotLight.shadow.camera.near = 1;
+            spotLight.shadow.camera.far = 20;
+
+            group.add(spotLight);
+
+            // Target for spotlight
+            const target = new THREE.Object3D();
+            target.position.set(0, 0, 0);
+            group.add(target);
+            spotLight.target = target;
+
+            // Glowing bulb
+            const bulbGeo = new THREE.SphereGeometry(0.3);
+            const bulbMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(2.0, 1.5, 0.0) });
+            const bulb = new THREE.Mesh(bulbGeo, bulbMat);
+            bulb.position.set(-12, 7.8, 0);
+            group.add(bulb);
+
+            group.position.z = zPos;
+            lightPoles.add(group);
+            streetLights.push(group);
+        }
+
+        // Generate initial lights
+        for (let i = 0; i < 5; i++) {
+            createStreetLight(-i * 40); // Space them 40 units apart
+        }
+
+        // Procedural Obstacles
+        const obstacles = [];
+        const obstaclesGroup = new THREE.Group();
+        scene.add(obstaclesGroup);
+
+        function spawnObstacle(zPos) {
+            // Randomly choose lane (-10 to 10)
+            const xPos = (Math.random() - 0.5) * 20;
+
+            // Neon glowing block
+            const obsGeo = new THREE.BoxGeometry(3, 2, 3);
+            // High emissive color for Bloom
+            const color = Math.random() > 0.5 ? new THREE.Color(0, 4.0, 4.0) : new THREE.Color(4.0, 0, 4.0);
+            const obsMat = new THREE.MeshStandardMaterial({
+                color: 0x111111,
+                emissive: color,
+                emissiveIntensity: 0.8,
+                roughness: 0.2
+            });
+
+            const obs = new THREE.Mesh(obsGeo, obsMat);
+            obs.position.set(xPos, 1, zPos);
+            obs.castShadow = true;
+            obs.receiveShadow = true;
+
+            obstaclesGroup.add(obs);
+            obstacles.push({
+                mesh: obs,
+                boundingSphere: new THREE.Sphere(obs.position.clone(), 1.8) // For collision
+            });
+        }
+
+        // --- Game Logic & Physics ---
+        let gameState = 'start'; // start, playing, gameover
+        let score = 0;
+        let speed = 0;
+        let carZ = 0;
+        let nextObstacleZ = -50;
+        let nextLightZ = -200;
+
+        const maxSpeed = 150;
+        const acceleration = 50;
+        const braking = 80;
+        const friction = 10;
+        const steeringSpeed = 25;
+
+        // Input state
+        const keys = { left: false, right: false, up: false, down: false };
+        const buttons = { left: false, right: false, gas: false, brake: false };
+
+        // Keyboard listeners
+        window.addEventListener('keydown', (e) => {
+            if (e.key === 'ArrowLeft' || e.key === 'a') keys.left = true;
+            if (e.key === 'ArrowRight' || e.key === 'd') keys.right = true;
+            if (e.key === 'ArrowUp' || e.key === 'w') keys.up = true;
+            if (e.key === 'ArrowDown' || e.key === 's') keys.down = true;
+        });
+        window.addEventListener('keyup', (e) => {
+            if (e.key === 'ArrowLeft' || e.key === 'a') keys.left = false;
+            if (e.key === 'ArrowRight' || e.key === 'd') keys.right = false;
+            if (e.key === 'ArrowUp' || e.key === 'w') keys.up = false;
+            if (e.key === 'ArrowDown' || e.key === 's') keys.down = false;
+        });
+
+        // Touch button listeners
+        function setupButton(id, keyName) {
+            const btn = document.getElementById(id);
+            btn.addEventListener('touchstart', (e) => { e.preventDefault(); buttons[keyName] = true; btn.classList.add('active'); }, {passive: false});
+            btn.addEventListener('touchend', (e) => { e.preventDefault(); buttons[keyName] = false; btn.classList.remove('active'); }, {passive: false});
+            btn.addEventListener('mousedown', (e) => { e.preventDefault(); buttons[keyName] = true; btn.classList.add('active'); });
+            window.addEventListener('mouseup', () => { buttons[keyName] = false; btn.classList.remove('active'); });
+        }
+        setupButton('btnLeft', 'left');
+        setupButton('btnRight', 'right');
+        setupButton('btnGas', 'gas');
+        setupButton('btnBrake', 'brake');
+
+        // UI Listeners
+        document.getElementById('startBtn').addEventListener('click', () => {
+            document.getElementById('screens').style.display = 'none';
+            resetGame();
+        });
+
+        function resetGame() {
+            speed = 0;
+            carZ = 0;
+            score = 0;
+            document.getElementById('scoreDisplay').innerText = `Score: 0`;
+            carGroup.position.set(0, 0, 0);
+            carGroup.rotation.y = 0;
+
+            // Clear obstacles
+            for (let obs of obstacles) {
+                obstaclesGroup.remove(obs.mesh);
+                obs.mesh.geometry.dispose();
+                obs.mesh.material.dispose();
+            }
+            obstacles.length = 0;
+            nextObstacleZ = -50;
+
+            gameState = 'playing';
+        }
+
+        function triggerGameOver() {
+            gameState = 'gameover';
+            document.getElementById('screens').style.display = 'flex';
+            document.getElementById('startPanel').innerHTML = `
+                <h1 style="color: #f00; text-shadow: 0 0 15px #f00;">CRASHED!</h1>
+                <p>Final Score: ${Math.floor(score)}</p>
+                <button class="start-btn" onclick="document.location.reload()">TRY AGAIN</button>
+            `;
+        }
+
+        // Handle Window Resize
+        window.addEventListener('resize', onWindowResize, false);
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            composer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        // Render Loop
+        const clock = new THREE.Clock();
+        function animate() {
+            requestAnimationFrame(animate);
+            const delta = Math.min(clock.getDelta(), 0.1); // Cap delta to prevent big jumps
+
+            if (gameState === 'playing') {
+                updatePhysics(delta);
+                updateEnvironment();
+                checkCollisions();
+            }
+
+            // Animate grid helper scrolling
+            gridHelper.position.z = (carZ % 10);
+
+            // Render via composer for post-processing
+            composer.render();
+        }
+
+        function updatePhysics(dt) {
+            // Acceleration / Braking
+            let isAccelerating = keys.up || buttons.gas;
+            let isBraking = keys.down || buttons.brake;
+
+            if (isAccelerating) {
+                speed += acceleration * dt;
+            } else if (isBraking) {
+                speed -= braking * dt;
+            } else {
+                speed -= friction * dt; // coasting
+            }
+
+            speed = Math.max(0, Math.min(speed, maxSpeed)); // clamp speed
+
+            // Move car forward (negative Z is forward in ThreeJS)
+            let distanceMoved = speed * dt;
+            carZ -= distanceMoved;
+
+            // Update Score
+            score += distanceMoved / 10;
+            document.getElementById('scoreDisplay').innerText = `Score: ${Math.floor(score)}`;
+
+            // Steering
+            let isTurningLeft = keys.left || buttons.left;
+            let isTurningRight = keys.right || buttons.right;
+            let targetRotation = 0;
+
+            if (speed > 5) {
+                if (isTurningLeft) {
+                    carGroup.position.x -= steeringSpeed * dt;
+                    targetRotation = Math.PI / 12; // tilt left
+                }
+                if (isTurningRight) {
+                    carGroup.position.x += steeringSpeed * dt;
+                    targetRotation = -Math.PI / 12; // tilt right
+                }
+            }
+
+            // Clamp car to road width (-12 to 12)
+            carGroup.position.x = Math.max(-12, Math.min(12, carGroup.position.x));
+
+            // Smoothly rotate car body back to center
+            carGroup.rotation.y += (targetRotation - carGroup.rotation.y) * 10 * dt;
+        }
+
+        function updateEnvironment() {
+            // Move camera with car
+            camera.position.z = carGroup.position.z + 10;
+            camera.position.x = carGroup.position.x * 0.5; // slight camera panning
+            camera.lookAt(carGroup.position.x * 0.2, 0, carGroup.position.z - 20);
+
+            // Procedurally spawn obstacles ahead
+            if (carZ - 150 < nextObstacleZ) {
+                spawnObstacle(nextObstacleZ);
+                nextObstacleZ -= Math.random() * 40 + (maxSpeed - speed) * 0.2 + 20;
+            }
+
+            // Procedurally spawn streetlights
+            if (carZ - 200 < nextLightZ) {
+                createStreetLight(nextLightZ);
+                nextLightZ -= 40;
+            }
+
+            // Move road to give illusion of endless
+            road.position.z = carGroup.position.z - (carGroup.position.z % 20);
+
+            // Cleanup passed obstacles and lights to save memory
+            for (let i = obstacles.length - 1; i >= 0; i--) {
+                if (obstacles[i].mesh.position.z > carGroup.position.z + 20) {
+                    obstaclesGroup.remove(obstacles[i].mesh);
+                    obstacles[i].mesh.geometry.dispose();
+                    obstacles[i].mesh.material.dispose();
+                    obstacles.splice(i, 1);
+                }
+            }
+
+            for (let i = streetLights.length - 1; i >= 0; i--) {
+                if (streetLights[i].position.z > carGroup.position.z + 50) {
+                    lightPoles.remove(streetLights[i]);
+                    // Proper disposal of light objects omitted for brevity, but they are removed from scene
+                    streetLights.splice(i, 1);
+                }
+            }
+        }
+
+        function checkCollisions() {
+            // Update car's bounding sphere for simple collision
+            const carSphere = new THREE.Sphere(carGroup.position.clone(), 1.5);
+
+            for (let obs of obstacles) {
+                // Update obstacle bounding sphere position
+                obs.boundingSphere.center.copy(obs.mesh.position);
+
+                if (carSphere.intersectsSphere(obs.boundingSphere)) {
+                    triggerGameOver();
+                    return;
+                }
+            }
+        }
+
+        // Start loop (Waiting for user input on start screen)
+        animate();
+    </script>
+</body>
+</html>
