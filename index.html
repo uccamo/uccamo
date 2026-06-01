@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Orbital Slingshot</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <canvas id="gameCanvas"></canvas>
+    <div id="uiContainer">
+        <div id="scoreDisplay">Score: 0</div>
+        <div id="gameOverScreen" style="display: none;">
+            <h1>Game Over</h1>
+            <p id="finalScore">Score: 0</p>
+            <button id="restartButton">Tap to Restart</button>
+        </div>
+        <div id="startScreen">
+            <h1>Orbital Slingshot</h1>
+            <p>Tap and hold to tether.<br>Release to slingshot.</p>
+            <p>Climb as high as you can!</p>
+            <button id="startButton">Start Game</button>
+        </div>
+    </div>
+    <script src="game.js"></script>
+</body>
+</html>
